@@ -6,8 +6,6 @@ import os
 import re
 from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
-# import cv2  # 注释掉cv2导入，因为它不是必需的
-# import numpy as np  # 注释掉numpy导入，因为它不是必需的
 from datetime import datetime
 from io import BytesIO
 
@@ -15,6 +13,7 @@ from io import BytesIO
 MAIN_URL = "http://127.0.0.1:5000/"
 LOGIN_URL = "http://127.0.0.1:5000/login"
 CAPTCHA_URL = "http://127.0.0.1:5000/captcha"
+DASHBOARD_URL = "http://127.0.0.1:5000/dashboard"
 
 # 登录凭据
 USERNAME = "admin"
@@ -23,18 +22,6 @@ PASSWORD = "123456"
 # 设置Tesseract OCR路径
 # 默认安装路径，根据实际情况修改
 TESSERACT_PATH = r"D:\captcha_login_ai\tesseract-5.5.1\tesseract.exe"
-
-# 统计变量
-total_attempts = 0
-successful_logins = 0
-
-# 创建实验记录目录
-def create_experiment_dir():
-    """创建实验记录目录"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_dir = f"experiment_{timestamp}"
-    os.makedirs(exp_dir, exist_ok=True)
-    return exp_dir
 
 def check_tesseract_installed():
     """检查Tesseract是否已安装"""
@@ -62,14 +49,13 @@ def check_tesseract_installed():
         print("Linux/Mac: /usr/bin/tesseract")
         return False
 
-def save_debug_image(image, filename, exp_dir):
+def save_debug_image(image, filename):
     """保存图像用于调试"""
-    filepath = os.path.join(exp_dir, filename)
-    image.save(filepath)
-    print(f"已保存图像到 {filepath}")
-    return filepath
+    image.save(filename)
+    print(f"已保存图像到 {filename}")
+    return filename
 
-def recognize_captcha(session, exp_dir, attempt_num):
+def recognize_captcha(session):
     """获取并识别验证码"""
     try:
         # 获取验证码图片
@@ -80,7 +66,7 @@ def recognize_captcha(session, exp_dir, attempt_num):
         
         # 保存原始验证码图片
         image = Image.open(BytesIO(response.content))
-        original_path = save_debug_image(image, f"original_captcha_{attempt_num}.png", exp_dir)
+        save_debug_image(image, "original_captcha.png")
         
         # 图像预处理
         # 转换为灰度图
@@ -95,7 +81,7 @@ def recognize_captcha(session, exp_dir, attempt_num):
         binary_image = enhanced_image.point(lambda x: 255 if x > threshold else 0, '1')
         
         # 保存预处理后的图片
-        preprocessed_path = save_debug_image(binary_image, f"preprocessed_captcha_{attempt_num}.png", exp_dir)
+        save_debug_image(binary_image, "preprocessed_captcha.png")
         
         # 使用多种PSM模式尝试识别
         psm_modes = [7, 8, 6, 10, 13]  # 不同的页面分割模式
@@ -129,11 +115,22 @@ def recognize_captcha(session, exp_dir, attempt_num):
         print(f"验证码识别过程中出现错误: {str(e)}")
         return ''.join([str(random.randint(0, 9)) for _ in range(4)])
 
-def attempt_login(exp_dir, attempt_num):
-    """尝试登录一次"""
-    global total_attempts, successful_logins
-    
+def extract_flag(html_content):
+    """从HTML内容中提取flag"""
+    flag_pattern = r'flag\{[^}]*\}'
+    match = re.search(flag_pattern, html_content)
+    if match:
+        return match.group(0)
+    return None
+
+def attempt_login_and_get_flag():
+    """尝试登录并获取flag，只测试一次"""
     try:
+        # 检查Tesseract是否已安装
+        if not check_tesseract_installed():
+            print("Tesseract OCR未正确安装，无法继续测试")
+            return False, None
+            
         # 创建会话以保持cookie
         session = requests.Session()
         
@@ -143,10 +140,10 @@ def attempt_login(exp_dir, attempt_num):
         except requests.exceptions.ConnectionError:
             print("错误: 无法连接到Flask服务器，请确保服务器正在运行于http://127.0.0.1:5000/")
             print("请先运行 'python app.py' 启动Flask应用，然后再运行此脚本。")
-            sys.exit(1)
+            return False, None
         
         # 识别验证码
-        captcha_text = recognize_captcha(session, exp_dir, attempt_num)
+        captcha_text = recognize_captcha(session)
         print(f"最终使用的验证码: {captcha_text}")
         
         # 提交登录表单
@@ -156,32 +153,31 @@ def attempt_login(exp_dir, attempt_num):
             'captcha': captcha_text
         }
         
-        response = session.post(LOGIN_URL, data=login_data)
-        
-        # 检查登录结果
-        total_attempts += 1
+        response = session.post(LOGIN_URL, data=login_data, allow_redirects=True)
         
         # 保存响应内容用于分析
-        response_path = os.path.join(exp_dir, f"login_response_{attempt_num}.html")
-        with open(response_path, "w", encoding="utf-8") as f:
+        with open("login_response.html", "w", encoding="utf-8") as f:
             f.write(response.text)
         
         # 验证登录是否成功
-        if "登录成功" in response.text:
-            successful_logins += 1
+        if "登录成功" in response.text or response.url.endswith('/dashboard'):
             print("登录成功!")
             
-            # 保存成功登录的响应
-            success_path = os.path.join(exp_dir, f"login_success_{attempt_num}.html")
-            with open(success_path, "w", encoding="utf-8") as f:
-                f.write(response.text)
+            # 如果登录成功但被重定向，需要访问dashboard页面获取flag
+            if not response.url.endswith('/dashboard'):
+                dashboard_response = session.get(DASHBOARD_URL)
+                dashboard_content = dashboard_response.text
+            else:
+                dashboard_content = response.text
             
-            # 记录成功的验证码和图像
-            success_log_path = os.path.join(exp_dir, "successful_logins.log")
-            with open(success_log_path, "a", encoding="utf-8") as f:
-                f.write(f"尝试 #{attempt_num}: 成功登录 - 验证码: {captcha_text}\n")
-            
-            return True
+            # 提取flag
+            flag = extract_flag(dashboard_content)
+            if flag:
+                print(f"成功获取flag: {flag}")
+                return True, flag
+            else:
+                print("登录成功但未找到flag")
+                return True, None
         else:
             print("登录失败!")
             
@@ -192,77 +188,27 @@ def attempt_login(exp_dir, attempt_num):
             elif "用户名或密码错误" in response.text:
                 failure_reason = "用户名或密码错误"
             
-            # 记录失败信息
-            failure_log_path = os.path.join(exp_dir, "failed_logins.log")
-            with open(failure_log_path, "a", encoding="utf-8") as f:
-                f.write(f"尝试 #{attempt_num}: 登录失败 - 原因: {failure_reason} - 验证码: {captcha_text}\n")
-            
             print(f"失败原因: {failure_reason}")
-            print(f"已保存登录响应到 {response_path}")
-            return False
+            return False, None
     except Exception as e:
         print(f"登录过程中出现错误: {str(e)}")
-        
-        # 记录错误信息
-        error_log_path = os.path.join(exp_dir, "errors.log")
-        with open(error_log_path, "a", encoding="utf-8") as f:
-            f.write(f"尝试 #{attempt_num}: 错误 - {str(e)}\n")
-        
-        return False
+        return False, None
 
 def main():
-    """主函数，执行多次登录尝试并统计结果"""
-    # 检查Tesseract是否已安装
-    if not check_tesseract_installed():
-        sys.exit(1)
-    
-    # 创建实验记录目录
-    exp_dir = create_experiment_dir()
-    print(f"实验记录将保存在目录: {exp_dir}")
-    
+    """主函数，只执行一次登录尝试"""
     print("开始自动化登录测试...")
     print("确保Flask应用正在运行于 http://127.0.0.1:5000/")
     
-    # 记录实验开始时间和配置
-    experiment_log_path = os.path.join(exp_dir, "experiment.log")
-    with open(experiment_log_path, "w", encoding="utf-8") as f:
-        f.write(f"实验开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"用户名: {USERNAME}\n")
-        f.write(f"密码: {PASSWORD}\n")
-        f.write(f"Tesseract路径: {TESSERACT_PATH}\n")
-        f.write("-----------------------------------\n")
+    success, flag = attempt_login_and_get_flag()
     
-    num_attempts = 10  # 尝试次数
+    if success:
+        print("\n测试结果: 成功")
+        if flag:
+            print(f"获取的flag: {flag}")
+    else:
+        print("\n测试结果: 失败")
     
-    for i in range(num_attempts):
-        print(f"\n尝试 #{i+1}:")
-        success = attempt_login(exp_dir, i+1)
-        if success is None:  # 如果遇到严重错误，退出循环
-            break
-        time.sleep(1)  # 避免请求过于频繁
-    
-    # 打印统计结果
-    success_rate = (successful_logins / total_attempts) * 100 if total_attempts > 0 else 0
-    result_summary = f"\n测试完成!\n总尝试次数: {total_attempts}\n成功登录次数: {successful_logins}\n登录成功率: {success_rate:.2f}%"
-    print(result_summary)
-    
-    # 保存统计结果
-    with open(os.path.join(exp_dir, "results.txt"), "w", encoding="utf-8") as f:
-        f.write(result_summary)
-    
-    # 更新实验日志
-    with open(experiment_log_path, "a", encoding="utf-8") as f:
-        f.write(f"\n实验结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(result_summary)
-    
-    print(f"\n实验记录已保存到目录: {exp_dir}")
-    print("可以查看以下文件了解详细信息:")
-    print(f"- {os.path.join(exp_dir, 'experiment.log')} - 实验配置和总结")
-    print(f"- {os.path.join(exp_dir, 'successful_logins.log')} - 成功登录记录")
-    print(f"- {os.path.join(exp_dir, 'failed_logins.log')} - 失败登录记录")
-    print(f"- {os.path.join(exp_dir, 'errors.log')} - 错误记录")
-    print(f"- {os.path.join(exp_dir, 'results.txt')} - 结果统计")
-    print(f"- 各验证码图像和登录响应HTML文件")
+    print("\n测试完成!")
 
 if __name__ == "__main__":
     main()

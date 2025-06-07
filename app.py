@@ -14,6 +14,9 @@ users = {
     'user': 'password'
 }
 
+# Flag信息
+FLAG = "flag{c4ptch4_br34k3r_succ33d}"
+
 # 生成验证码图片
 def generate_captcha(length=4):
     # 生成随机数字
@@ -89,7 +92,7 @@ def login():
             if 'captcha' in session and captcha == session['captcha']:
                 session['logged_in'] = True
                 session['username'] = username
-                return render_template('login.html', message='登录成功')
+                return redirect(url_for('dashboard'))
             else:
                 error = '验证码错误'
         else:
@@ -100,6 +103,15 @@ def login():
     session['captcha'] = captcha_text
     
     return render_template('login.html', error=error)
+
+@app.route('/dashboard')
+def dashboard():
+    # 检查用户是否已登录
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    
+    username = session.get('username')
+    return render_template('dashboard.html', username=username, flag=FLAG)
 
 @app.route('/captcha')
 def captcha():

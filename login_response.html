@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>登录系统</title>
+    <title>Dashboard - 登录成功</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -15,101 +15,75 @@
             align-items: center;
             height: 100vh;
         }
-        .login-container {
+        .dashboard-container {
             background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 300px;
-        }
-        h2 {
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            width: 500px;
             text-align: center;
+        }
+        h1 {
             color: #333;
+            margin-bottom: 20px;
         }
-        .form-group {
-            margin-bottom: 15px;
+        .welcome-message {
+            font-size: 18px;
+            margin-bottom: 30px;
+            color: #555;
         }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 8px;
+        .flag-container {
+            background-color: #f8f9fa;
             border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
         }
-        .captcha-container {
-            display: flex;
-            align-items: center;
+        .flag {
+            font-family: monospace;
+            font-size: 20px;
+            color: #28a745;
+            font-weight: bold;
+            letter-spacing: 1px;
         }
-        .captcha-image {
-            margin-right: 10px;
-            cursor: pointer;
-        }
-        button {
-            background-color: #4CAF50;
+        .logout-btn {
+            background-color: #dc3545;
             color: white;
-            padding: 10px 15px;
+            padding: 10px 20px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            width: 100%;
             font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+            transition: background-color 0.3s;
         }
-        button:hover {
-            background-color: #45a049;
+        .logout-btn:hover {
+            background-color: #c82333;
         }
-        .error-message {
-            color: #f44336;
-            margin-bottom: 15px;
-        }
-        .success-message {
-            color: #4CAF50;
-            margin-bottom: 15px;
+        .success-icon {
+            font-size: 60px;
+            color: #28a745;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <h2>用户登录</h2>
+    <div class="dashboard-container">
+        <div class="success-icon">✓</div>
+        <h1>登录成功</h1>
+        <div class="welcome-message">
+            <p>欢迎 admin! 您已成功通过验证码验证并登录系统。</p>
+        </div>
         
+        <div class="flag-container">
+            <p>恭喜您获得了flag：</p>
+            <p class="flag">flag{c4ptch4_br34k3r_succ33d}</p>
+        </div>
         
-        <div class="error-message">验证码错误</div>
-        
-        
-        
-        
-        <form action="/login" method="post">
-            <div class="form-group">
-                <label for="username">用户名:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">密码:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div class="form-group">
-                <label for="captcha">验证码:</label>
-                <div class="captcha-container">
-                    <img id="captcha-image" src="/captcha?r=891" alt="验证码" class="captcha-image" onclick="refreshCaptcha()">
-                    <input type="text" id="captcha" name="captcha" required style="width: 100px;">
-                </div>
-                <small>(点击图片刷新)</small>
-            </div>
-            <div class="form-group">
-                <button type="submit">登录</button>
-            </div>
-        </form>
+        <a href="/logout" class="logout-btn">登出</a>
     </div>
-
-    <script>
-        function refreshCaptcha() {
-            document.getElementById('captcha-image').src = '/captcha?' + Math.random();
-        }
-    </script>
 </body>
 </html>
